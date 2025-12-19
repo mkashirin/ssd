@@ -1,0 +1,3 @@
+[submodule "lab3+4/third_party/DVWA"]
+	path = lab3+4/third_party/DVWA
+	url = git@github.com:digininja/DVWA

@@ -1,0 +1,12 @@
+[package]
+name = "password_cracker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.51", features = ["derive"] }
+hex = "0.4.3"
+indicatif = { version = "0.18.2", features = ["rayon"] }
+md-5 = "0.10.6"
+rayon = "1.11.0"
+sha2 = "0.10.9"
