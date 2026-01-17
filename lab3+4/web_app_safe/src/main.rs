@@ -1,6 +1,7 @@
 use axum::{
     Router,
     extract::{Query, State},
+    http::StatusCode,
     response::Html,
     routing::get,
 };
@@ -36,6 +37,13 @@ struct LoginParams {
     login_btn: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct BlindSqliParams {
+    id: Option<String>,
+    #[serde(rename = "Submit")]
+    submit: Option<String>,
+}
+
 #[tokio::main]
 async fn main() {
     if !Path::new("users.db").exists() {
@@ -54,6 +62,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/vulnerabilities/brute/", get(login_handler))
+        .route("/vulnerabilities/sqli_blind/", get(blind_sqli_handler))
         .layer(session_layer)
         .with_state(AppState { db: pool });
 
@@ -109,6 +118,65 @@ async fn login_handler(
     };
 
     render_html(&csrf_token, &message, user)
+}
+
+async fn blind_sqli_handler(
+    State(state): State<AppState>,
+    Query(params): Query<BlindSqliParams>,
+) -> (StatusCode, Html<String>) {
+    let html_top = r#"
+    <!DOCTYPE html>
+    <html>
+    <head><title>Secure Blind SQLi</title></head>
+    <body style="font-family: sans-serif; padding: 20px;">
+        <h2>Blind SQL Injection (Secure Rust Implementation)</h2>
+        <div style="border: 1px solid #ccc; padding: 20px; width: 300px;">
+            <form action="" method="GET">
+                <label>User ID:</label><br>
+                <input type="text" name="id" style="width: 100%"><br><br>
+                <input type="submit" name="Submit" value="Submit">
+            </form>
+        </div>
+        <br>
+    "#;
+    let html_bottom = "</body></html>";
+
+    if params.submit.is_none() {
+        return (StatusCode::OK, Html(format!("{}{}", html_top, html_bottom)));
+    }
+
+    let id_input = params.id.as_deref().unwrap_or("");
+
+    let query = "SELECT id FROM users WHERE id = ?";
+
+    let result = sqlx::query(query)
+        .bind(id_input)
+        .fetch_optional(&state.db)
+        .await;
+
+    match result {
+        Ok(Some(_)) => {
+            let msg = "<pre>User ID exists in the database.</pre>";
+            (
+                StatusCode::OK,
+                Html(format!("{}{}{}", html_top, msg, html_bottom)),
+            )
+        }
+        Ok(None) => {
+            let msg = "<pre>User ID is MISSING from the database.</pre>";
+            (
+                StatusCode::NOT_FOUND,
+                Html(format!("{}{}{}", html_top, msg, html_bottom)),
+            )
+        }
+        Err(_) => {
+            let msg = "<pre>Error: Invalid input.</pre>";
+            (
+                StatusCode::OK,
+                Html(format!("{}{}{}", html_top, msg, html_bottom)),
+            )
+        }
+    }
 }
 
 fn render_html(token: &str, msg: &str, user_val: &str) -> Html<String> {
